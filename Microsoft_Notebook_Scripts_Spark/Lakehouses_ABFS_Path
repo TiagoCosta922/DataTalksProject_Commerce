@@ -1,0 +1,25 @@
+# Lakehouses_ABFS_Path
+
+
+## Get dynamic ABFS lakehouse path for each layer: AraBronze, AraSilver, AraGold!  We can use this notebook with a %run /Lakehouses_ABFS_Path and we can we the path dynamic
+
+def get_lakehouse_abfs_path(display_name):
+    '''
+    Get dynamic ABFS lakehouse path for each layer: AraBronze, AraSilver, AraGold!
+    '''
+    return next((lh['properties']['abfsPath'] for lh in mssparkutils.lakehouse.list() if lh['displayName'] == display_name), None)
+
+# Paths for each layer
+bronze_abfs_path = get_lakehouse_abfs_path("Bronze_Layer")
+silver_abfs_path = get_lakehouse_abfs_path("Silver_Layer")
+gold_abfs_path = get_lakehouse_abfs_path("Gold_Layer")
+
+# Printing the result.
+print(f"To access Bronze Layer, use this variable name: bronze_abfs_path")
+print(f"In case of need, direct path to the lakehouse AraBronze: {bronze_abfs_path}\n")
+
+print(f"To access Silver Layer, use this variable name: silver_abfs_path")
+print(f"In case of need, direct path to the lakehouse AraSilver: {silver_abfs_path}\n")
+
+print(f"To access Gold Layer, use this variable name: gold_abfs_path")
+print(f"In case of need, direct path to the lakehouse AraGold: {gold_abfs_path}\n")
