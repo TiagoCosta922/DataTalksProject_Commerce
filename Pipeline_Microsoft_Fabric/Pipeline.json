@@ -1,0 +1,273 @@
+{
+    "name": "Ingest_Data_Kaggle",
+    "objectId": "e953c207-24c7-4b47-b590-b1f3a057a196",
+    "properties": {
+        "activities": [
+            {
+                "name": "For_Each_Item",
+                "type": "ForEach",
+                "dependsOn": [],
+                "typeProperties": {
+                    "items": {
+                        "value": "@pipeline().parameters.tables_names",
+                        "type": "Expression"
+                    },
+                    "activities": [
+                        {
+                            "name": "Copy_Raw_Data_Bronze_Layer",
+                            "description": "Copy the all data from sql server on premises to bronze lakehouse in raw format",
+                            "type": "Copy",
+                            "dependsOn": [],
+                            "policy": {
+                                "timeout": "0.12:00:00",
+                                "retry": 0,
+                                "retryIntervalInSeconds": 30,
+                                "secureOutput": false,
+                                "secureInput": false
+                            },
+                            "typeProperties": {
+                                "source": {
+                                    "type": "SqlServerSource",
+                                    "queryTimeout": "02:00:00",
+                                    "partitionOption": "None",
+                                    "datasetSettings": {
+                                        "annotations": [],
+                                        "type": "SqlServerTable",
+                                        "schema": [],
+                                        "typeProperties": {
+                                            "schema": "dbo",
+                                            "table": {
+                                                "value": "@item()",
+                                                "type": "Expression"
+                                            },
+                                            "database": "kaggle"
+                                        },
+                                        "externalReferences": {
+                                            "connection": "6ebb5809-f057-4fe5-9fd1-2b109e5ae59e"
+                                        }
+                                    }
+                                },
+                                "sink": {
+                                    "type": "LakehouseTableSink",
+                                    "tableActionOption": "OverwriteSchema",
+                                    "partitionOption": "None",
+                                    "datasetSettings": {
+                                        "annotations": [],
+                                        "linkedService": {
+                                            "name": "Bronze_Layer",
+                                            "properties": {
+                                                "annotations": [],
+                                                "type": "Lakehouse",
+                                                "typeProperties": {
+                                                    "workspaceId": "f8fb3c7e-c575-4626-8a00-6b0d7d65fa8d",
+                                                    "artifactId": "e9e4f2b9-d555-47fc-b1e5-d41112b3f291",
+                                                    "rootFolder": "Tables"
+                                                }
+                                            }
+                                        },
+                                        "type": "LakehouseTable",
+                                        "schema": [],
+                                        "typeProperties": {
+                                            "schema": "dbo",
+                                            "table": {
+                                                "value": "@item()",
+                                                "type": "Expression"
+                                            }
+                                        }
+                                    }
+                                },
+                                "enableStaging": false,
+                                "translator": {
+                                    "type": "TabularTranslator",
+                                    "typeConversion": true,
+                                    "typeConversionSettings": {
+                                        "allowDataTruncation": true,
+                                        "treatBooleanAsNumber": false
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "name": "Transformations",
+                "type": "TridentNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "For_Each_Item",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookId": "13719db2-1982-4f05-b271-4b8d687e8e37",
+                    "workspaceId": "f8fb3c7e-c575-4626-8a00-6b0d7d65fa8d"
+                }
+            },
+            {
+                "name": "Data_Modeling",
+                "type": "TridentNotebook",
+                "dependsOn": [
+                    {
+                        "activity": "Transformations",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.12:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "typeProperties": {
+                    "notebookId": "d3e5fdcf-cfa9-43f3-a91f-82cd67faacac",
+                    "workspaceId": "f8fb3c7e-c575-4626-8a00-6b0d7d65fa8d"
+                }
+            },
+            {
+                "name": "Error With Ingestion",
+                "type": "Office365Outlook",
+                "state": "Inactive",
+                "onInactiveMarkAs": "Succeeded",
+                "dependsOn": [
+                    {
+                        "activity": "For_Each_Item",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "inputs": {
+                        "method": "post",
+                        "path": "/v2/Mail",
+                        "body": {
+                            "To": "",
+                            "Subject": "Notice about DataTalksProject",
+                            "Body": "<p>The @{pipeline().Pipeline} detected a failure in data ingestion.</p>",
+                            "Sensitivity": "",
+                            "Importance": "Normal"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Failure in Transformations",
+                "type": "Office365Outlook",
+                "state": "Inactive",
+                "onInactiveMarkAs": "Succeeded",
+                "dependsOn": [
+                    {
+                        "activity": "Transformations",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "inputs": {
+                        "method": "post",
+                        "path": "/v2/Mail",
+                        "body": {
+                            "To": "",
+                            "Subject": "Notice about DataTalksProject",
+                            "Body": "<p>The @{pipeline().Pipeline} detected a failure during the transformations step.</p>",
+                            "Sensitivity": "",
+                            "Importance": "Normal"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Process Fail in Data Modeling",
+                "type": "Office365Outlook",
+                "state": "Inactive",
+                "onInactiveMarkAs": "Succeeded",
+                "dependsOn": [
+                    {
+                        "activity": "Data_Modeling",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "inputs": {
+                        "method": "post",
+                        "path": "/v2/Mail",
+                        "body": {
+                            "To": "",
+                            "Subject": "Notice About DataTalksProject",
+                            "Body": "<p>The @{pipeline().Pipeline} detected a failure during the DataModeling step.</p>",
+                            "Sensitivity": "",
+                            "Importance": "Normal"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "All Good",
+                "type": "Office365Outlook",
+                "state": "Inactive",
+                "onInactiveMarkAs": "Succeeded",
+                "dependsOn": [
+                    {
+                        "activity": "Data_Modeling",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "typeProperties": {
+                    "inputs": {
+                        "method": "post",
+                        "path": "/v2/Mail",
+                        "body": {
+                            "To": "",
+                            "Subject": "Notice About DataTalksProject",
+                            "Body": "<p>The @{pipeline().Pipeline} runs with success</p>",
+                            "Sensitivity": "",
+                            "Importance": "Normal"
+                        }
+                    }
+                }
+            }
+        ],
+        "parameters": {
+            "tables_names": {
+                "type": "array",
+                "defaultValue": [
+                    "categories",
+                    "cities",
+                    "countries",
+                    "customers",
+                    "employees",
+                    "products"
+                ]
+            }
+        },
+        "lastModifiedByObjectId": "bccc01ea-6ae7-4a55-9d9d-2a5b87977485",
+        "lastPublishTime": "2025-03-18T17:43:38Z",
+        "logicAppsConnectionPayload": {
+            "id": "/subscriptions/8134bcad-3f8c-4be2-8218-40855d84f4d3/resourceGroups/connections-f8fb3c7e-c575-4626-8a00-6b0d7d65fa8d/providers/Microsoft.Web/connections/1_e953c207-24c7-4b47-b590-b1f3a057a196_bccc01ea-6ae7-4a55-9d9d-2a5b87977485",
+            "properties": {
+                "api": {
+                    "name": "office365",
+                    "id": "/subscriptions/8134bcad-3f8c-4be2-8218-40855d84f4d3/providers/Microsoft.Web/locations/westeurope/managedApis/office365"
+                }
+            }
+        }
+    }
+}
