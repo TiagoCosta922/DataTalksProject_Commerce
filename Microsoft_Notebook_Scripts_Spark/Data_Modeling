@@ -1,0 +1,146 @@
+%run /Lakehouses_ABFS_Path
+
+
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+from pyspark.sql import DataFrame
+import pandas as pd
+import re
+from datetime import datetime
+
+
+def read_delta(file):
+    """
+    Load a Delta table from the Silver layer.
+
+    Parameters:
+    -----------
+    file : DataFrame
+        The DataFrame from silver layer to load.
+
+    """
+    tables_path =f'{silver_abfs_path}/Tables/dbo' 
+    return spark.read.format('delta').load(f'{tables_path}/{file}')
+
+categories = read_delta('categories')
+cities = read_delta('cities')
+customers = read_delta('customers')
+employees = read_delta('employees')
+products = read_delta('products')
+sales = read_delta('sales')
+
+
+## Products Dimension
+
+categories= categories.drop('RegistrationDate')
+Dim_Products = products.join(categories, on="CategoryID", how="left")
+
+Dim_Products = Dim_Products.select( 
+    'ProductId',
+    'CategoryID',
+    'ProductName',
+    'CategoryName',
+    'Class',
+    'Resistant',
+    'IsAllergic',
+    'ModifyDate',
+    'RegistrationDate'
+)
+
+## Employee Dimension
+
+cities = cities.select(
+    'CityID',
+    'CityName',
+    'Zipcode'
+)
+
+Dim_Employee = employees.join(cities, on='CityID', how='left')
+
+Dim_Employee = Dim_Employee.select( 
+    'EmployeeID',
+    'FirstName',
+    'LastName',
+    'Gender',
+    'CityID',
+    'CityName',
+    'Zipcode',
+    'BirthDate',
+    'HireDate',
+    'RegistrationDate'
+)
+
+
+## Customers Dimension
+
+Dim_Customers = customers.join(cities, on='CityID', how='left')
+
+Dim_Customers.select(
+    'CustomerID',
+    'FirstName',
+    'LastName',
+    'Address',
+    'PortNumber',
+    'CityID',
+    'CityName',
+    'Zipcode',
+    'RegistrationDate'
+)
+
+## Date Dimension
+
+Dim_Date = spark.read.csv(f'{bronze_abfs_path}/Files/dimdates.csv', header=True)
+
+Dim_Date= Dim_Date.select(
+    'Date',
+    'DayShortName',
+    'MonthShortName',
+    'CalendarYear',
+    'CalendarMonth',
+    'CalendarDay',
+    'CalendarWeek',
+    'CalendarQuarter'
+)
+
+## Sales Fact
+
+Sales Fact = sales
+
+## Load Delta Tables (Gold Layer)
+
+def load_delta(df, table_name):
+    """
+    Write a Delta table to the Gold layer.
+
+    Parameters:
+    -----------
+    df : DataFrame
+        The DataFrame to write to the Gold layer.
+
+    table_name : str
+        The name of the table (used for directory name in the Gold layer).
+    """
+    tables_path = f'{gold_abfs_path}/Tables/dbo'
+
+    if table_name != 'Dim_Date':
+        return df.write.format("delta") \
+            .mode("overwrite") \
+            .option("overwriteSchema", "true") \
+            .partitionBy("RegistrationDate") \
+            .save(f'{tables_path}/{table_name}')
+    else:
+        return df.write.format("delta") \
+            .mode("overwrite") \
+            .option("overwriteSchema", "true") \
+            .save(f'{tables_path}/{table_name}')
+
+
+load_delta(Dim_Date, 'Dim_Date')
+load_delta(Dim_Products, 'Dim_Products')
+load_delta(Dim_Employee, 'Dim_Employee')
+load_delta(Dim_Customers, 'Dim_Customers')
+load_delta(Fact_Sales, 'Fact_Sales')
+
+
+
+
