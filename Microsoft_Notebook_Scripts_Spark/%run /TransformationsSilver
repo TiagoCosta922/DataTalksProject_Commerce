@@ -1,0 +1,123 @@
+## Run the Notebook Lakehouses_ABFS_Path, this notebook returns all the ABFS path of the lakehouses of our Workspace
+
+%run /Lakehouses_ABFS_Path
+
+
+from pyspark.sql.types import *
+from pyspark.sql.functions import *
+from pyspark.sql import DataFrame
+import pandas as pd
+import re
+from datetime import datetime
+
+## Load delta tables
+
+def read_delta(file :str)-> DataFrame: 
+    """Reads delta tables in bronze layer.
+    """
+    tables_path =f'{bronze_abfs_path}/Tables/dbo'
+    return spark.read.format('delta').load(f'{tables_path}/{file}')
+
+categories = read_delta('categories')
+cities = read_delta('cities')
+customers = read_delta('customers')
+employees = read_delta('employees')
+products = read_delta('products')
+sales = read_delta('sales')
+
+
+
+
+## Explore the DataFrame Categories
+
+categories = categories.withColumn('CategoryID', col('CategoryID').cast('int'))
+categories = categories.withColumn('RegistrationDate', current_date())
+
+
+
+## Explore the DataFrame cities
+
+cities = cities.withColumn('CityID', col('CityID').cast('int'))
+cities = cities.withColumn('Zipcode', col('Zipcode').cast('int'))
+cities = cities.withColumn('CountryID', col('CountryID').cast('int'))
+cities = cities.withColumn('RegistrationDate', current_date())
+
+
+
+## Explore the DataFrame customers
+
+customers = customers.withColumn("PortNumber", regexp_extract("Address", r"(\d+)", 0))
+customers = customers.withColumn("Address", regexp_replace("Address", r"^\d+\s*", ""))
+customers = customers.withColumn("MiddleInitial", 
+                   when(col("MiddleInitial").isNull(), "Unknown")  
+                   .otherwise(when(col("MiddleInitial") == "NULL", "Unknown") 
+                              .otherwise(col("MiddleInitial")))  
+                  )
+
+customers = customers.withColumn('CustomerID', col('CustomerID').cast('int'))
+customers = customers.withColumn('CityID', col('CityID').cast('int'))
+customers = customers.withColumn('PortNumber', col('PortNumber').cast('int'))
+customers = customers.withColumn('RegistrationDate', current_date())
+
+
+
+
+## Explore the DataFrame employees
+
+employees = employees.withColumn('EmployeeID', col('EmployeeID').cast('int'))
+employees = employees.withColumn('BirthDate', col('BirthDate').cast('date'))
+employees = employees.withColumn('HireDate', col('HireDate').cast('date'))
+employees = employees.withColumn('RegistrationDate', current_date())
+
+
+## Explore the DataFrame products
+
+products = products.withColumn('ProductID', col('ProductID').cast('int'))
+products = products.withColumn('Price', round(col('Price').cast('float'), 2))
+products = products.withColumn('CategoryID', col('CategoryID').cast('int'))
+products = products.withColumn('ModifyDate', col('ModifyDate').cast('date'))
+products = products.withColumn('VitalityDays', col('VitalityDays').cast('int'))
+products = products.withColumn('RegistrationDate', current_date())
+
+
+
+## Explore the DataFrame sales
+
+sales = sales.withColumn('SalesID', col('SalesID').cast('int'))
+sales = sales.withColumn('SalesPersonID', col('SalesPersonID').cast('int'))
+sales = sales.withColumn('CustomerID', col('CustomerID').cast('int'))
+sales = sales.withColumn('ProductID', col('ProductID').cast('int'))
+sales = sales.withColumn(
+    'SalesDate',
+    when(col('SalesDate').isNull(), '1900-01-01')  
+    .when(col('SalesDate') == 'NULL', '1900-01-01')
+    .otherwise(col('SalesDate').cast('date')) 
+)
+sales = sales.withColumn('Quantity', col('Quantity').cast('int'))
+sales = sales.withColumn('Discount', col('Discount').cast('float'))
+sales = sales.withColumn('TotalPrice', col('Discount').cast('float'))
+
+sales = sales.withColumn('TotalPrice', round(col('Quantity') * col('Discount'), 2))
+sales = sales.withColumn('RegistrationDate', current_date())
+
+
+## Load Delta Tables (to Silver Layer)
+
+def load_delta_support(df: DataFrame, table_name: str) -> DataFrame: 
+
+  
+    # Write a Delta table to the Silver layer. 
+    tables_path =f'{silver_abfs_path}/Tables/dbo' 
+    return df.write.format("delta") \
+        .mode("overwrite") \
+        .option("overwriteSchema", "true") \
+        .partitionBy("RegistrationDate") \
+        .save(f'{tables_path}/{table_name}')
+
+
+load_delta_support(categories,'categories')
+load_delta_support(cities, 'cities')
+load_delta_support(customers, 'customers')
+load_delta_support(employees, 'employees')
+load_delta_support(products, 'products')
+load_delta_support(sales, 'sales')
