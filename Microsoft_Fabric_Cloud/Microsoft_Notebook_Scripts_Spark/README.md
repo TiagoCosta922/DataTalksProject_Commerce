@@ -14,6 +14,11 @@ make the necessary transformations to the data to maintain their integrity and u
 
 A date record called 'RegistrationDate' column was created that will be used to create partitions. Whenever new data is inserted to be processed, we will know the date of the transformations.
 
+As you can see in next picture:
+
+<img width="1268" alt="image" src="https://github.com/user-attachments/assets/dd702815-da80-48f8-81df-fba2e79b097a" />
+
+
 
 ## Data_Modeling
 
