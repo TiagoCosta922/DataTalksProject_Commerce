@@ -24,3 +24,4 @@ The data will be loaded from silver and the necessary table aggregations and joi
 The data model will be as shown in the following image:
 
 
+<img width="854" alt="image" src="https://github.com/user-attachments/assets/1b446c3e-e5b2-43fa-ad95-11f3eb7304c0" />
